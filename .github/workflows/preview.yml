@@ -1,0 +1,25 @@
+name: Render preview image
+on:
+  push:
+    branches: [main]
+    paths: ['index.html', '.github/workflows/preview.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: preview
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Screenshot the toy at 1200x630 for link previews
+        run: |
+          google-chrome --headless=new --no-sandbox --hide-scrollbars --window-size=1200,630 \
+            --virtual-time-budget=9000 --screenshot="$PWD/preview.png" "file://$PWD/index.html?preview"
+          ls -la preview.png
+      - name: Commit preview.png
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add preview.png
+          if git diff --cached --quiet; then echo "no change"; else git commit -m "Update preview.png" && git push; fi
