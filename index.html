@@ -7,6 +7,22 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Party_Cles — gravity particle toy</title>
+<meta name="description" content="A gravity particle toy: drag to pull, tap for stars, hold for black holes.">
+<link rel="canonical" href="https://zupzol.github.io/Party_Cles/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Party_Cles">
+<meta property="og:title" content="Party_Cles">
+<meta property="og:description" content="A gravity particle toy: drag to pull, tap for stars, hold for black holes.">
+<meta property="og:url" content="https://zupzol.github.io/Party_Cles/">
+<meta property="og:image" content="https://raw.githubusercontent.com/zupzol/Party_Cles/main/preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Silver particles swirling around a star in Party_Cles">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Party_Cles">
+<meta name="twitter:description" content="A gravity particle toy: drag to pull, tap for stars, hold for black holes.">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/zupzol/Party_Cles/main/preview.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><radialGradient id='c'><stop offset='0' stop-color='%23fff'/><stop offset='.22' stop-color='%23ffe2b8'/><stop offset='.6' stop-color='%23ffb36b' stop-opacity='.25'/><stop offset='1' stop-color='%23ffb36b' stop-opacity='0'/></radialGradient></defs><rect width='64' height='64' rx='14' fill='%23080a1a'/><g fill='none' stroke='%23cfd8e6' stroke-linecap='round'><path d='M32 32c0-9 9-14 17-10' stroke-width='3' opacity='.9'/><path d='M32 32c0 9-9 14-17 10' stroke-width='3' opacity='.9'/><path d='M32 32c-6-6-4-16 4-20' stroke-width='1.6' opacity='.45'/><path d='M32 32c6 6 4 16-4 20' stroke-width='1.6' opacity='.45'/></g><circle cx='32' cy='32' r='13' fill='url%28%23c%29'/><circle cx='32' cy='32' r='3.2' fill='%23fff'/></svg>">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:#03040a;overflow:hidden;overscroll-behavior:none;color:#dfe6f3;
@@ -55,11 +71,17 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;border:0;border-radiu
 #hint.gone{opacity:0}
 #toast{position:fixed;left:50%;top:calc(58px + env(safe-area-inset-top));transform:translateX(-50%);padding:6px 14px;border-radius:999px;font-size:12px;opacity:0;transition:opacity .4s;pointer-events:none;z-index:4}
 #toast.show{opacity:.9}
+.pv #top,.pv #hint,.pv #panel,.pv #toast{display:none}
 @media (max-width:640px){
   .brand{display:none}
   #panel{top:auto;bottom:calc(8px + env(safe-area-inset-bottom));left:8px;right:8px;width:auto;max-height:50vh}
   #panel.closed{transform:translateY(calc(100% + 24px))}
   #hint{font-size:11px}
+}
+@media (max-width:400px){
+  #top{gap:5px;left:8px;right:8px}
+  .seg button{padding:6px 10px}
+  .ib{width:32px;height:32px}
 }
 </style>
 </head>
@@ -71,6 +93,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;border:0;border-radiu
     <button data-mode="pull" class="on">Pull</button><button data-mode="push">Push</button><button data-mode="spin">Spin</button>
   </div>
   <div class="sp"></div>
+  <button class="ib glass" id="share" title="Share link"><svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
   <button class="ib glass" id="snd" title="Drone sound (off)"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="sndw" d="M17 9c1.5 1.5 1.5 4.5 0 6M19.5 6.5c3 3 3 8 0 11" opacity=".35"/></svg></button>
   <button class="ib glass" id="fs" title="Full screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   <button class="ib glass" id="cfg" title="Controls"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
@@ -93,6 +116,8 @@ const cv = document.getElementById('c');
 const ctx = cv.getContext('2d', { alpha: false });
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia('(pointer:coarse)').matches;
+const PREVIEW = /[?&]preview\b/.test(location.search);
+if (PREVIEW) document.documentElement.classList.add('pv');
 const TAU = Math.PI * 2;
 const MAXN = 8000;
 const K = 2250; // gravity constant (px^3/frame^2 per unit mass)
@@ -144,6 +169,21 @@ const px = new Float32Array(MAXN), py = new Float32Array(MAXN), vx = new Float32
 const sz = new Float32Array(MAXN), op = new Float32Array(MAXN), life = new Float32Array(MAXN), maxl = new Float32Array(MAXN);
 const trl = new Float32Array(MAXN), sd = new Float32Array(MAXN), jt = new Float32Array(MAXN), glow = new Float32Array(MAXN);
 const vr = new Uint8Array(MAXN), bk = new Uint8Array(MAXN);
+// "home" rails: 1 = spiral arm (density-wave lock), 2 = ring band. Particles spring toward a moving home point,
+// so pointers can disturb them but the structure heals instead of smearing.
+const hk = new Uint8Array(MAXN), hr = new Float32Array(MAXN), ht = new Float32Array(MAXN), hw = new Float32Array(MAXN);
+const cf = new Float32Array(MAXN).fill(1); // brightness cap near star cores
+let homeC = null;
+const ARM = { K: -1.75, Wp: .2 };
+let HX = 0, HY = 0, HVX = 0, HVY = 0;
+function armOmega(r) { return ARM.Wp * (1 + 1.7 * Math.exp(-r / (R0 * .33))); } // rad/s
+function homeOf(i) {
+  const c = homeC, r = hr[i]; let th, rd = 0, om;
+  if (hk[i] === 1) { th = ht[i] + ARM.K * Math.log(r / (R0 * .1)) + ARM.Wp * T; om = armOmega(r) / 60; rd = r * (om * 60 - ARM.Wp) / ARM.K / 60; }
+  else { th = ht[i]; om = hw[i]; }
+  const co = Math.cos(th), si = Math.sin(th);
+  HX = c.x + r * co; HY = c.y + r * si; HVX = rd * co - r * om * si + c.vx; HVY = rd * si + r * om * co + c.vy;
+}
 let active = 0;
 
 // ---------- bodies ----------
@@ -186,17 +226,19 @@ function buildAttractors() {
     const reach = b.type === 'moon' ? S.reach * .4 : b.type === 'planet' ? Math.max(200, S.reach * 1.2) : reachStar;
     const grow = b.type === 'hole' ? Math.min(1, (T - b.born) * 2.5) : 1;
     A.push({ x: b.x, y: b.y, k: K * b.m * S.gravity * grow, reach, soft2: (b.r + 10) * (b.r + 10), spin: 0, dir: b.dir || 1, steer: true,
-      hole: b.type === 'hole' ? b : null, solid: (b.type === 'planet' || b.type === 'moon') ? b.r : 0, inner: 0, bvx: b.vx, bvy: b.vy });
+      hole: b.type === 'hole' ? b : null, solid: (b.type === 'planet' || b.type === 'moon') ? b.r : 0, inner: 0, bvx: b.vx, bvy: b.vy,
+      core: (b.type === 'star' || b.type === 'pulsar') ? b.r * 2.6 + 4 : 0, home: b === homeC });
   }
   const now = performance.now();
   for (const p of pointers.values()) {
     if (!p.down && (p.type !== 'mouse' || now - p.lastMove > 1500)) continue;
-    const base = K * S.gravity * (p.down ? 2.0 : .3);
+    const ramp = p.down ? Math.min(1, (now - p.t0) / 220) : 1; // ease in so the first touch doesn't jolt
+    const base = K * S.gravity * (p.down ? 2.0 : .3) * (.2 + .8 * ramp * ramp);
     const reach = p.down ? S.reach : S.reach * .6;
     let k = base, spin = .35;
     if (S.mode === 'push') { k = -base * 1.2; spin = 0; }
     else if (S.mode === 'spin') { k = base * .3; spin = 3.2; }
-    A.push({ x: p.x, y: p.y, k, reach, soft2: 900, spin, dir: 1, steer: false, hole: null, solid: 0, inner: 40, bvx: 0, bvy: 0 });
+    A.push({ x: p.x, y: p.y, k, reach, soft2: 900, spin, dir: 1, steer: false, hole: null, solid: 0, inner: 40, bvx: 0, bvy: 0, core: 0, home: false });
     const sp = Math.hypot(p.vx, p.vy);
     if (sp > .2) WAKES.push({ x: p.x, y: p.y, vx: p.vx, vy: p.vy, r: reach * .7, k: (p.down ? .1 : .03) * (1 + Math.min(1.5, p.acc * .08)) });
   }
@@ -222,7 +264,12 @@ function put(i, x, y, ux, uy, l) {
   px[i] = x; py[i] = y; vx[i] = ux; vy[i] = uy;
   sz[i] = .45 + Math.pow(Math.random(), 2.2) * 1.5; op[i] = .35 + Math.random() * .65;
   trl[i] = .5 + Math.random(); sd[i] = rnd(TAU); jt[i] = Math.random(); glow[i] = 0;
-  vr[i] = (Math.random() * 3) | 0; maxl[i] = life[i] = l;
+  vr[i] = (Math.random() * 3) | 0; maxl[i] = life[i] = l; hk[i] = 0; cf[i] = 1;
+}
+function railPut(i, kind, r, th, l) {
+  put(i, 0, 0, 0, 0, l); hk[i] = kind; hr[i] = r; ht[i] = th;
+  if (kind === 2) { const c = homeC; hw[i] = Math.sqrt(K * c.m * S.gravity / (r * r + (c.r + 10) ** 2) / r); }
+  homeOf(i); px[i] = HX + gauss() * .6; py[i] = HY + gauss() * .6; vx[i] = HVX; vy[i] = HVY;
 }
 function orbitPut(i, x, y, l, jit = .15) { const [ux, uy] = steerTarget(x, y); put(i, x, y, ux + gauss() * jit, uy + gauss() * jit, l); }
 function spawn(i) { if (spawnFn) spawnFn(i); else dustSpawn(i); }
@@ -231,15 +278,14 @@ function dustSpawn(i) { put(i, rnd(-20, W + 20), rnd(-20, H + 20), gauss() * .4,
 function body(type) { return bodies.find(b => b.type === type); }
 const SHAPE_SETUP = {
   spiral() {
-    const c = mkStar(W / 2, H / 2, { m: 1.25, r: 9 }); bodies.push(c);
+    const c = mkStar(W / 2, H / 2, { m: 1.25, r: 9 }); bodies.push(c); homeC = c;
     return i => {
       const u = Math.random();
-      if (u < .07) { const r = Math.abs(gauss()) * R0 * .16 + 22, a = rnd(TAU); orbitPut(i, c.x + Math.cos(a) * r, c.y + Math.sin(a) * r, rnd(8, 20)); }
-      else if (u < .18) { const r = rnd(.1, 1.15) * R0, a = rnd(TAU); orbitPut(i, c.x + Math.cos(a) * r, c.y + Math.sin(a) * r, rnd(10, 30)); }
+      if (u < .08) { const r = Math.abs(gauss()) * R0 * .1 + 34, a = rnd(TAU); orbitPut(i, c.x + Math.cos(a) * r, c.y + Math.sin(a) * r, rnd(6, 14)); }
+      else if (u < .17) { const r = rnd(.2, 1.1) * R0, a = rnd(TAU); orbitPut(i, c.x + Math.cos(a) * r, c.y + Math.sin(a) * r, rnd(10, 30)); }
       else {
-        const arm = Math.random() < .5 ? 0 : Math.PI; const r = R0 * (.12 + .95 * Math.pow(Math.random(), .8));
-        const th = arm + Math.log(r / (R0 * .1)) * 1.7 + gauss() * .26 + T * .02;
-        orbitPut(i, c.x + Math.cos(th) * r, c.y + Math.sin(th) * r, rnd(4, 10));
+        const arm = Math.random() < .5 ? 0 : Math.PI, f = Math.pow(Math.random(), .85), r = R0 * (.16 + 1.0 * f);
+        railPut(i, 1, r, arm + gauss() * (.1 + .2 * f), rnd(7, 18));
       }
     };
   },
@@ -257,9 +303,9 @@ const SHAPE_SETUP = {
     };
   },
   ring() {
-    const c = mkStar(W / 2, H / 2, { m: 1.1, r: 8, color: [190, 210, 255] }); bodies.push(c);
-    return i => { const r = Math.random() < .85 ? R0 * (.58 + gauss() * .035) : R0 * rnd(.15, .4), t = rnd(TAU);
-      orbitPut(i, c.x + Math.cos(t) * r, c.y + Math.sin(t) * r, rnd(12, 32), .05); };
+    const c = mkStar(W / 2, H / 2, { m: 1.1, r: 8, color: [190, 210, 255] }); bodies.push(c); homeC = c;
+    return i => { const u = Math.random(); const r = u < .8 ? R0 * (.58 + (Math.random() - .5) * .03) : u < .9 ? R0 * (.66 + (Math.random() - .5) * .008) : R0 * rnd(.2, .42);
+      railPut(i, 2, r, rnd(TAU), rnd(12, 32)); if (u >= .8) sz[i] *= .7; };
   },
   dust() { return dustSpawn; },
   cluster() {
@@ -284,11 +330,13 @@ const SHAPE_SETUP = {
     const pr = Math.max(26, R0 * .15);
     bodies.push(mkStar(W * .1, H * .14, { m: 0, r: 6, color: [255, 220, 170] }));
     const p = { type: 'planet', x: W / 2, y: H / 2, vx: 0, vy: 0, m: 1.6, r: pr, color: [214, 186, 140], bands: true, born: T, dir: 1 };
-    bodies.push(p);
-    addMoon(p, pr * 5.2, 4, .35); addMoon(p, pr * 6.3, 3, .25);
-    return i => { let r; do { r = R0 * (.25 + Math.random() * .38); } while (r > R0 * .45 && r < R0 * .48);
-      if (Math.random() < .12) r = R0 * rnd(.5, .7);
-      const t = rnd(TAU); orbitPut(i, p.x + Math.cos(t) * r, p.y + Math.sin(t) * r, rnd(15, 40), .03); };
+    bodies.push(p); homeC = p;
+    addMoon(p, R0 * .78, 4, .03); addMoon(p, R0 * .93, 3, .02);
+    // narrow bands with clean gaps between them: [radius, width, weight] as fractions of R0
+    const BANDS = [[.26, .012, .5], [.292, .02, .9], [.338, .034, 1.7], [.383, .008, .5], [.42, .03, 1.6], [.468, .006, .35], [.505, .016, .8], [.56, .005, .3]];
+    const tot = BANDS.reduce((a, b) => a + b[2], 0);
+    return i => { let u = Math.random() * tot, b = BANDS[0]; for (const x of BANDS) { if ((u -= x[2]) <= 0) { b = x; break; } }
+      railPut(i, 2, R0 * (b[0] + (Math.random() - .5) * b[1]), rnd(TAU), rnd(15, 40)); sz[i] *= .75; };
   }
 };
 
@@ -299,7 +347,7 @@ function addMoon(p, dist, r, m) {
 }
 
 function setShape(name) {
-  S.shape = name; bodies = [];
+  S.shape = name; bodies = []; homeC = null;
   spawnFn = SHAPE_SETUP[name]();
   updBodies(0); buildAttractors();
   for (let i = 0; i < active; i++) { spawn(i); life[i] = maxl[i] * rnd(.15, 1); }
@@ -511,6 +559,15 @@ function syncUI() {
 document.querySelectorAll('#modes button').forEach(b => b.onclick = () => { S.mode = b.dataset.mode; syncUI(); });
 $('cfg').onclick = () => { $('panel').classList.toggle('closed'); $('cfg').classList.toggle('on', !$('panel').classList.contains('closed')); };
 $('snd').onclick = () => { droneOn = !droneOn; droneOn ? droneStart() : droneStop(); $('snd').classList.toggle('on', droneOn); $('sndw').setAttribute('opacity', droneOn ? '1' : '.35'); $('snd').title = 'Drone sound (' + (droneOn ? 'on' : 'off') + ')'; };
+const CANON = 'https://zupzol.github.io/Party_Cles/';
+function shareUrl() { if (location.hostname === 'zupzol.github.io') return location.origin + location.pathname; return /^https?:$/.test(location.protocol) ? location.href : CANON; }
+$('share').onclick = async () => {
+  const url = shareUrl(), data = { title: 'Party_Cles', text: 'A gravity particle toy: drag to pull, tap for stars, hold for black holes.', url };
+  if (navigator.share) { try { await navigator.share(data); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+  try { await navigator.clipboard.writeText(url); toast('Link copied'); return; } catch (e) {}
+  const ta = document.createElement('textarea'); ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) {} ta.remove(); toast(ok ? 'Link copied' : url);
+};
 const fsOK = document.fullscreenEnabled || document.webkitFullscreenEnabled;
 if (!fsOK) $('fs').style.display = 'none';
 $('fs').onclick = () => { const d = document, e = d.documentElement;
@@ -581,14 +638,20 @@ window.addEventListener('resize', resize);
 function step(dt) {
   const n = active, cap = S.cap, cap2 = cap * cap, dmp = Math.max(0, 1 - S.damping * dt), orbS = S.orbit * .035 * dt;
   const AL = A.length, WL = WAKES.length, PL = PULSARS.length, NL = NEBULAE.length, dtS = dt / 60, margin = 160;
+  const armMin = homeC ? Math.max(R0 * .12, homeC.r * 4.5) : 0;
+  const r_dot = r => r * (armOmega(r) - ARM.Wp) / ARM.K / 60;
   const pul = PULSARS.map(b => ({ x: b.x, y: b.y, bx: Math.cos(b.ang), by: Math.sin(b.ang), tn: Math.tan(b.hw), len: b.len }));
   for (let i = 0; i < n; i++) {
-    let x = px[i], y = py[i], ux = vx[i], uy = vy[i], ax = 0, ay = 0, tx = 0, ty = 0, tw = 0, dead = false;
+    let x = px[i], y = py[i], ux = vx[i], uy = vy[i], ax = 0, ay = 0, tx = 0, ty = 0, tw = 0, dead = false, cmin = 9;
+    const rail = hk[i];
     for (let j = 0; j < AL; j++) {
-      const a = A[j]; const dx = a.x - x, dy = a.y - y, d2 = dx * dx + dy * dy;
+      const a = A[j]; if (rail && a.home) continue;
+      const dx = a.x - x, dy = a.y - y, d2 = dx * dx + dy * dy;
       if (a.hole && d2 < a.hole.r * a.hole.r) { dead = true; a.hole.eat++; break; }
       if (a.solid && d2 < a.solid * a.solid) { dead = true; break; }
+      if (a.core && d2 < a.core * a.core) { dead = true; break; } // recycle instead of piling up inside a star
       const d = Math.sqrt(d2) + 1e-3, q = d / a.reach;
+      if (a.core) { const cr = d / a.core; if (cr < cmin) cmin = cr; }
       let f = a.k / (d2 + a.soft2) / (1 + q * q * q * q);
       if (a.inner && d < a.inner) f *= d / a.inner;
       const nx = dx / d, ny = dy / d; ax += nx * f; ay += ny * f;
@@ -599,8 +662,9 @@ function step(dt) {
     if (dead) { spawn(i); continue; }
     // ambient drift + individual jitter
     const s0 = sd[i];
-    ax += .011 * Math.sin(y * .0042 + T * .27 + s0) + (Math.random() - .5) * .03 * jt[i];
-    ay += .011 * Math.cos(x * .0037 - T * .21 + s0) + (Math.random() - .5) * .03 * jt[i];
+    const amb = rail === 2 ? .2 : 1;
+    ax += (.011 * Math.sin(y * .0042 + T * .27 + s0) + (Math.random() - .5) * .03 * jt[i]) * amb;
+    ay += (.011 * Math.cos(x * .0037 - T * .21 + s0) + (Math.random() - .5) * .03 * jt[i]) * amb;
     for (let j = 0; j < WL; j++) { const wk = WAKES[j]; const dx = x - wk.x, dy = y - wk.y, d2 = dx * dx + dy * dy;
       if (d2 < wk.r * wk.r) { let c = 1 - Math.sqrt(d2) / wk.r; c *= c * wk.k * dt; ux += (wk.vx - ux) * c; uy += (wk.vy - uy) * c; } }
     for (let j = 0; j < PL; j++) { const p = pul[j]; const rx = x - p.x, ry = y - p.y; const al = rx * p.bx + ry * p.by, pe = rx * p.by - ry * p.bx, aal = al < 0 ? -al : al;
@@ -608,7 +672,13 @@ function step(dt) {
     for (let j = 0; j < NL; j++) { const nb = NEBULAE[j]; const dx = x - nb.x, dy = y - nb.y, d2 = dx * dx + dy * dy;
       if (d2 < nb.r * nb.r) { const d = Math.sqrt(d2) + 1e-3, k = 1 - d / nb.r; ux *= 1 - .025 * k * dt; uy *= 1 - .025 * k * dt; ax += -dy / d * .012 * k; ay += dx / d * .012 * k; if (glow[i] < 1) glow[i] += .05; } }
     ux += ax * dt; uy += ay * dt;
-    if (tw > 0) {
+    if (rail) {
+      if (rail === 1) { hr[i] += r_dot(hr[i]) * dt; if (hr[i] < armMin) { spawn(i); continue; } }
+      else ht[i] += hw[i] * dt;
+      homeOf(i);
+      const rk = rail === 2 ? 2 : 1, ks = (.0015 + .006 * S.orbit) * rk * dt, kd = Math.min(.5, (.02 + .09 * S.orbit) * rk * dt);
+      ux += (HX - x) * ks + (HVX - ux) * kd; uy += (HY - y) * ks + (HVY - uy) * kd;
+    } else if (tw > 0) {
       const wf = tw / (tw + .004), gx = tx / tw * wf, gy = ty / tw * wf;
       if (orbS > 0) { const s = orbS * wf; ux += (gx - ux) * s; uy += (gy - uy) * s; }
       // damping acts on motion relative to the local orbital flow, so orbits don't decay into the star
@@ -621,6 +691,7 @@ function step(dt) {
     if (life[i] <= 0 || x < -margin || x > W + margin || y < -margin || y > H + margin) { spawn(i); continue; }
     px[i] = x; py[i] = y; vx[i] = ux; vy[i] = uy;
     glow[i] *= .94;
+    let c = (cmin - 1) / 1.6; cf[i] = c < .1 ? .1 : c > 1 ? 1 : c;
     const sp = Math.sqrt(ux * ux + uy * uy) / cap;
     let kb = (sp * 10 + glow[i]) | 0; if (kb > 7) kb = 7;
     bk[i] = vr[i] * 8 + kb;
@@ -698,7 +769,7 @@ function render() {
   // trails batched by color bucket
   const paths = []; for (let k = 0; k < 24; k++) paths.push(new Path2D());
   const tk = tex.tK;
-  for (let i = 0; i < n; i++) { const ux = vx[i], uy = vy[i]; if (ux * ux + uy * uy < .08) continue; const L = tk * trl[i]; const p = paths[bk[i]]; p.moveTo(px[i], py[i]); p.lineTo(px[i] - ux * L, py[i] - uy * L); }
+  for (let i = 0; i < n; i++) { const ux = vx[i], uy = vy[i]; if (ux * ux + uy * uy < .08 || cf[i] < .5) continue; const L = tk * trl[i]; const p = paths[bk[i]]; p.moveTo(px[i], py[i]); p.lineTo(px[i] - ux * L, py[i] - uy * L); }
   ctx.lineCap = 'round'; ctx.lineWidth = tex.tW; ctx.globalAlpha = tex.tA;
   for (let k = 0; k < 24; k++) { ctx.strokeStyle = trailCols[k]; ctx.stroke(paths[k]); }
   // heads
@@ -706,7 +777,7 @@ function render() {
   for (let i = 0; i < n; i++) {
     const age = maxl[i] - life[i]; let e = age * 2; const e2 = life[i] * 1.2; if (e2 < e) e = e2; if (e > 1) e = 1;
     const ux = vx[i], uy = vy[i], sp = Math.sqrt(ux * ux + uy * uy) * capI;
-    const a = op[i] * e * ha * (.55 + .45 * Math.min(1, sp * 2.5) + glow[i] * .1); if (a < .02) continue;
+    const a = op[i] * e * ha * cf[i] * (.55 + .45 * Math.min(1, sp * 2.5) + glow[i] * .1); if (a < .02) continue;
     const s = sz[i] * hs * (1 + .35 * Math.min(1, sp * 2));
     ctx.globalAlpha = a > 1 ? 1 : a; ctx.drawImage(sprites[bk[i]], px[i] - s * .5, py[i] - s * .5, s, s);
   }
@@ -746,11 +817,12 @@ function frame(now) {
   // adaptive quality
   if (el < 250) { fpsT += el; fpsN++; } else { fpsT = 0; fpsN = 0; }
   if (fpsT > 1000) { const fps = fpsN * 1000 / fpsT; fpsT = 0; fpsN = 0;
-    if (fps < 50 && now - started > 2500 && now - userCount > 3000 && active > 300) { setCount(Math.max(300, active * .82)); autoLowered = true; syncUI(); toast(`Keeping it smooth: ${active} particles`); } }
+    if (!PREVIEW && fps < 50 && now - started > 2500 && now - userCount > 3000 && active > 300) { setCount(Math.max(300, active * .82)); autoLowered = true; syncUI(); toast(`Keeping it smooth: ${active} particles`); } }
   requestAnimationFrame(frame);
 }
 
 resize(); buildSprites(); active = S.count; setShape('spiral'); syncUI();
+updBodies(0); buildAttractors(); render(); // paint the first frame immediately, before the first rAF
 requestAnimationFrame(t => { last = t; started = t; requestAnimationFrame(frame); });
 window.__partycles = { S, get active() { return active; }, get bodies() { return bodies; } };
 })();
