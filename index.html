@@ -67,6 +67,8 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;border:0;border-radiu
 .row{display:flex;gap:8px;padding-top:12px}
 .row button{flex:1;padding:9px;border-radius:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.08)}
 .row button:hover{background:rgba(255,255,255,.14)}
+.row button{min-height:44px;white-space:nowrap}#edit{padding:10px 0 2px}.row button:disabled{opacity:.4;cursor:default}
+.ib.dim{opacity:.3}.ib:disabled{cursor:default}
 #hint{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:8px 16px;border-radius:999px;opacity:.85;white-space:nowrap;transition:opacity 1s;z-index:1;pointer-events:none;font-size:12px}
 #hint.gone{opacity:0}
 #toast{position:fixed;left:50%;top:calc(132px + env(safe-area-inset-top));transform:translateX(-50%);padding:6px 14px;border-radius:999px;font-size:12px;opacity:0;transition:opacity .4s;pointer-events:none;z-index:4}
@@ -103,6 +105,8 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;border:0;border-radiu
 .sw button.lock{box-shadow:none}
 #stats{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:12px;opacity:.75;font-variant-numeric:tabular-nums}
 @media (pointer:coarse){.seg button{min-height:38px}.chips button{padding:8px 12px}.sw button{width:32px;height:32px}.ib{width:40px;height:40px}}
+.ib{flex:none}
+@media (max-width:430px){#undoT{display:none!important}}
 @media (max-width:400px){.ib{width:36px;height:36px}#xpb{width:44px}#fs{display:none!important}.seg button{padding:6px 9px}}
 @media (max-width:640px){
   .brand{display:none}
@@ -126,12 +130,14 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;border:0;border-radiu
   </div>
   <div class="sp"></div>
   <button class="ib glass" id="share" title="Share link"><svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
+  <button class="ib glass dim" id="undoT" title="Undo last star or black hole (Ctrl/Cmd+Z)" disabled><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
   <button class="ib glass on" id="sfx" title="Sound effects (on)"><svg viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/><path id="sfxx" d="M3 3l18 18" opacity="0"/></svg></button>
   <button class="ib glass" id="snd" title="Drone sound (off)"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="sndw" d="M17 9c1.5 1.5 1.5 4.5 0 6M19.5 6.5c3 3 3 8 0 11" opacity=".35"/></svg></button>
   <button class="ib glass" id="fs" title="Full screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   <button class="ib glass" id="cfg" title="Controls"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
 </div>
 <div id="panel" class="glass closed">
+  <div class="row" id="edit"><button id="undo" title="Remove the last star or black hole">↶ Undo</button><button id="clear" title="Remove all stars and black holes">✕ Clear stars &amp; holes</button></div>
   <section><h3>Progress</h3><div id="stats"></div></section>
   <section><h3>Stage</h3><div class="chips" id="stages"></div></section>
   <section><h3>Texture</h3><div class="chips" id="textures"></div></section>
@@ -200,13 +206,41 @@ const G = window.G = (() => {
   function lvlOf(xp) { let l = 1; while (xp >= need(l)) { xp -= need(l); l++; } return [l, xp, need(l)]; }
   const g = { st, save, eat: 0, shake: 0, score: 0, combo: 1, comboT: 0, sparks: [], floats: [], pend: 0, modeT: 0 };
   // --- audio blips ---
-  let ac = null;
+  // ambient voice: soft sine/triangle, slow attack, long release, pentatonic, through a gentle delay + reverb bus
+  let ac = null, bus = null;
+  const PENTA = [0, 2, 4, 7, 9];
+  const snap = f => { const m = 12 * Math.log2(f / 261.63), o = Math.floor(m / 12), r = m - o * 12; let best = 0;
+    for (const p of PENTA.concat(12)) if (Math.abs(p - r) < Math.abs(best - r)) best = p; return 261.63 * Math.pow(2, (o * 12 + best) / 12); };
+  function audio() {
+    if (ac) { if (ac.state !== 'running') ac.resume(); return ac; }
+    ac = window.__pcAC = new (window.AudioContext || window.webkitAudioContext)();
+    const master = ac.createGain(); master.gain.value = .55; const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200;
+    master.connect(lp); lp.connect(ac.destination);
+    const inp = ac.createGain(); inp.connect(master);
+    const dl = ac.createDelay(2), fb = ac.createGain(), dw = ac.createGain(), df = ac.createBiquadFilter();
+    dl.delayTime.value = .38; fb.gain.value = .38; dw.gain.value = .32; df.type = 'lowpass'; df.frequency.value = 1800;
+    inp.connect(dl); dl.connect(df); df.connect(fb); fb.connect(dl); df.connect(dw); dw.connect(master);
+    const cv = ac.createConvolver(), len = ac.sampleRate * 2.6 | 0, ir = ac.createBuffer(2, len, ac.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
+    cv.buffer = ir; const rw = ac.createGain(); rw.gain.value = .45; inp.connect(cv); cv.connect(rw); rw.connect(master);
+    bus = inp; return ac;
+  }
   g.blip = (f, d = .06, type = 'sine', delay = 0, vol = .07) => {
     if (!st.sfx) return;
-    try { ac = ac || (window.__pcAC = new (window.AudioContext || window.webkitAudioContext)()); if (ac.state !== 'running') ac.resume();
-      const t = ac.currentTime + delay, o = ac.createOscillator(), gn = ac.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 1.5, t + d);
-      gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(vol, t + .008); gn.gain.exponentialRampToValueAtTime(.0001, t + d + .12); o.connect(gn); gn.connect(ac.destination); o.start(t); o.stop(t + d + .15);
+    try { audio(); const t = ac.currentTime + delay + .005, o = ac.createOscillator(), gn = ac.createGain();
+      o.type = type === 'triangle' ? 'triangle' : 'sine'; o.frequency.value = snap(Math.max(110, Math.min(1400, f)));
+      const v = Math.min(.05, vol * .45), atk = .025 + Math.min(.06, d * .3), rel = .9 + d * 3;
+      gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(v, t + atk); gn.gain.setTargetAtTime(0, t + atk, rel / 4);
+      o.connect(gn); gn.connect(bus); o.start(t); o.stop(t + atk + rel * 1.6);
     } catch (e) {}
+  };
+  // soft shimmering chord: detuned sine pairs, staggered, slow swell
+  g.chord = (notes = [523.25, 659.25, 783.99, 1046.5]) => { if (!st.sfx) return;
+    try { audio(); const t0 = ac.currentTime + .01;
+      notes.forEach((f, i) => [-6, 6].forEach(det => { const t = t0 + i * .07, o = ac.createOscillator(), gn = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
+        o.type = 'sine'; o.frequency.value = f; o.detune.value = det; lfo.frequency.value = 4 + i; lg.gain.value = 3; lfo.connect(lg); lg.connect(o.detune);
+        gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(.012, t + .35); gn.gain.setTargetAtTime(0, t + .5, .7);
+        o.connect(gn); gn.connect(bus); o.start(t); lfo.start(t); o.stop(t + 4); lfo.stop(t + 4); })); } catch (e) {}
   };
   const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
   g.burst = (x, y, col, n = 18, sp = 3) => { for (let k = 0; k < n; k++) { const a = Math.random() * TAU, v = sp * (.3 + Math.random()); g.sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, l: 1, col }); } if (g.sparks.length > 400) g.sparks.splice(0, g.sparks.length - 400); };
@@ -220,7 +254,7 @@ const G = window.G = (() => {
     if (x !== undefined) g.float(x, y, '+' + v); bump(); return v; };
   g.hit = () => { g.combo = Math.min(9, g.combo + .25); g.comboT = 2.2; if (g.combo > st.maxCombo) st.maxCombo = Math.floor(g.combo); };
   // --- unlocks ---
-  g.locked = id => { const L = UNLOCK[id]; if (L && g.level() < L) { toast('🔒 Unlocks at level ' + L); g.blip(180, .08, 'square', 0, .03); buzz(15); return true; } return false; };
+  g.locked = id => { const L = UNLOCK[id]; if (L && g.level() < L) { toast('🔒 Unlocks at level ' + L); g.blip(196, .1, 'triangle', 0, .04); buzz(15); return true; } return false; };
   g.syncLocks = () => { const l = g.level();
     document.querySelectorAll('#textures button').forEach(b => b.classList.toggle('lock', (UNLOCK['t:' + b.dataset.k] || 0) > l));
     document.querySelectorAll('#colors button').forEach(b => b.classList.toggle('lock', (UNLOCK['c:' + b.dataset.k] || 0) > l));
@@ -228,7 +262,7 @@ const G = window.G = (() => {
   function levelUp(l) {
     const un = Object.entries(UNLOCK).filter(([, v]) => v === l).map(([k]) => k.slice(2));
     milestone('Level ' + l, un.length ? 'Unlocked: ' + un.map(cap).join(', ') : 'Keep going: more unlocks ahead');
-    g.shake = 10; buzz([20, 40, 30]); [523, 659, 784, 1046].forEach((f, i) => g.blip(f, .1, 'triangle', i * .08, .06));
+    g.shake = 10; buzz([20, 40, 30]); g.chord();
     g.burst(W / 2, H * .38, [200, 180, 255], 60, 6); if (typeof syncUI === 'function') syncUI();
   }
   const cap = s => s[0].toUpperCase() + s.slice(1);
@@ -266,12 +300,14 @@ const G = window.G = (() => {
   document.getElementById('lvl').onclick = () => { const p = document.getElementById('panel'); p.classList.remove('closed'); document.getElementById('cfg').classList.add('on'); p.scrollTop = 0; };
   document.getElementById('goal').onclick = () => { g.newGoal(); g.blip(440, .05); };
   // --- events ---
-  g.onStar = (x, y, col) => { st.stars++; g.points(5, x, y); g.prog('stars', 1); g.burst(x, y, col, 14, 2.4); g.blip(700 + Math.random() * 200, .05); buzz(8); };
-  g.onHole = (x, y) => { g.points(10, x, y); g.shake = Math.max(g.shake, 5); g.blip(110, .25, 'sine', 0, .1); buzz(25); };
+  g.onStar = (x, y, col) => { st.stars++; const pts = g.points(5, x, y); g.prog('stars', 1); g.burst(x, y, col, 14, 2.4); g.blip(700 + Math.random() * 200, .05); buzz(8); return pts; };
+  g.onHole = (x, y) => { const pts = g.points(10, x, y); g.shake = Math.max(g.shake, 5); g.blip(131, .3, 'sine', 0, .09); buzz(25); return pts; };
   g.fuse = (x, y) => { const s = bodies.find(b => b.type === 'star' && b.tap && Math.hypot(b.x - x, b.y - y) < Math.max(26, b.r * 3.2)); if (!s) return false;
     s.m = Math.min(2.4, s.m + .35); s.r = Math.min(16, s.r + 1.6); s.born = T - .2; st.fused++; g.hit();
     g.points(25, s.x, s.y); g.prog('fuse', 1); g.burst(s.x, s.y, s.color, 34, 4.5); flash(s.x, s.y, s.color); g.shake = Math.max(g.shake, 6);
     g.blip(880 + s.r * 30, .08, 'triangle'); buzz([10, 20, 10]); return true; };
+  // undo / clear: take back the placement bonus (never below 0) so placing and undoing can't farm points
+  g.refund = b => { if (b.pts) { g.score = Math.max(0, g.score - b.pts); b.pts = 0; } if (b.type === 'star') g.prog('stars', -1); hud(); };
   g.used = () => g.blip(620, .04);
   // --- per frame ---
   g.tick = (dt, now) => {
@@ -290,7 +326,7 @@ const G = window.G = (() => {
       for (const h of holes) { const dx = h.x - b.x, dy = h.y - b.y, d = Math.hypot(dx, dy) || 1; if (d > 200) continue;
         const f = .06 * dt * (1 - d / 200) * Math.min(1, (T - h.born)); b.x += dx / d * f * d * .04 + dx / d * f; b.y += dy / d * f * d * .04 + dy / d * f;
         if (d < h.r + 4) { bodies.splice(k, 1); h.eat += 200; g.hit(); g.hit(); g.points(100 * (b.m || 1), h.x, h.y - 24); g.prog('gulp', 1);
-          g.burst(h.x, h.y, b.color, 60, 6); g.shake = 12; buzz([30, 30, 60]); g.blip(160, .35, 'sawtooth', 0, .05); g.blip(90, .5, 'sine', .05, .12); flash(h.x, h.y, b.color); }
+          g.burst(h.x, h.y, b.color, 60, 6); g.shake = 12; buzz([30, 30, 60]); g.blip(196, .4, 'triangle', 0, .08); g.blip(131, .6, 'sine', .08, .1); flash(h.x, h.y, b.color); }
         break; } }
     if (g.shake) { g.shake *= Math.pow(.85, dt); if (g.shake < .3) g.shake = 0; }
     if (now - (g.saveT || 0) > 5000) { g.saveT = now; save(); stats(); }
@@ -753,6 +789,7 @@ let autoLowered = false;
 $('reset').onclick = () => { const keep = autoLowered ? Math.min(S.count, DEF.count) : DEF.count; Object.assign(S, DEF); S.count = keep; active = Math.min(active, keep); setCount(keep);
   renderStage(); buildSprites(); setShape('spiral'); toast('Reset'); };
 $('rand').onclick = randomize;
+$('undo').onclick = undo; $('undoT').onclick = undo; $('clear').onclick = clearBodies;
 function pick(a) { return a[(Math.random() * a.length) | 0]; }
 function randomize() {
   S.stage = pick(['galaxy', 'galaxy', 'nebula', 'nebula', 'void', 'sea', 'dune', 'moon']);
@@ -765,6 +802,7 @@ function randomize() {
   toast('Randomized');
 }
 window.addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') return;
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
   if (e.key === '1') S.mode = 'pull'; else if (e.key === '2') S.mode = 'push'; else if (e.key === '3') S.mode = 'spin'; else if (e.key === 'r') randomize(); else return; syncUI(); });
 
 // hint
@@ -775,14 +813,22 @@ function hideHint() { if (!hintGone) { hintGone = true; hintEl.classList.add('go
 setTimeout(hideHint, 9000);
 
 // ---------- input ----------
+const placed = [];
+function livePlaced() { for (let k = placed.length - 1; k >= 0; k--) if (!bodies.includes(placed[k])) placed.splice(k, 1); return placed; }
+function undoUI() { const n = livePlaced().length; $('undo').disabled = $('undoT').disabled = !n; $('clear').disabled = !bodies.some(b => b.tap || b.type === 'hole'); $('undoT').classList.toggle('dim', !n); }
+function undo() { const b = livePlaced().pop(); if (!b) { toast('Nothing to undo'); return; }
+  bodies.splice(bodies.indexOf(b), 1); G.refund(b); G.burst(b.x, b.y, b.color || [170, 150, 255], 10, 1.6); G.blip(392, .12, 'sine', 0, .05); toast(b.type === 'hole' ? 'Black hole removed' : 'Star removed'); undoUI(); }
+function clearBodies() { const rm = bodies.filter(b => b.tap || b.type === 'hole'); if (!rm.length) { toast('Nothing to clear'); return; }
+  for (const b of rm) { G.refund(b); G.burst(b.x, b.y, b.color || [170, 150, 255], 6, 1.4); }
+  bodies = bodies.filter(b => !rm.includes(b)); placed.length = 0; G.blip(262, .3, 'sine', 0, .05); G.blip(392, .3, 'sine', .12, .04); toast('Cleared ' + rm.length); undoUI(); }
 function addStar(x, y) {
   if (G.fuse(x, y)) return;
   const n = bodies.filter(b => b.type === 'star' && b.tap); if (n.length >= 12) bodies.splice(bodies.indexOf(n[0]), 1);
-  const col = mix(hexRgb(S.color), [255, 230, 190], .25); const s = mkStar(x, y, { m: .9, r: rnd(6, 8), color: col, tap: true, added: true }); bodies.push(s); flash(x, y, col); G.onStar(x, y, col);
+  const col = mix(hexRgb(S.color), [255, 230, 190], .25); const s = mkStar(x, y, { m: .9, r: rnd(6, 8), color: col, tap: true, added: true }); bodies.push(s); flash(x, y, col); s.pts = G.onStar(x, y, col); placed.push(s); undoUI();
 }
 function addHole(x, y) {
   const n = bodies.filter(b => b.type === 'hole'); if (n.length >= 5) bodies.splice(bodies.indexOf(n[0]), 1);
-  bodies.push({ type: 'hole', added: true, x, y, vx: 0, vy: 0, m: 3.2, r: 3, eat: 0, born: T, dir: 1 }); flash(x, y, [170, 150, 255]); G.onHole(x, y);
+  const h = { type: 'hole', added: true, x, y, vx: 0, vy: 0, m: 3.2, r: 3, eat: 0, born: T, dir: 1 }; bodies.push(h); flash(x, y, [170, 150, 255]); h.pts = G.onHole(x, y); placed.push(h); undoUI();
 }
 function pDown(e) {
   e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (_) {}
@@ -994,7 +1040,7 @@ function frame(now) {
     if (now - p.lastMove > 40) { p.vx *= .82; p.vy *= .82; p.acc *= .8; }
     if (p.down && !p.moved && !p.holeMade && now - p.t0 > 450) { p.holeMade = true; addHole(p.x, p.y); }
   }
-  updBodies(dt); G.tick(dt, now); buildAttractors(); step(dt); render();
+  updBodies(dt); G.tick(dt, now); if (fpsN % 15 === 0) undoUI(); buildAttractors(); step(dt); render();
   if (dr && (fpsN % 6 === 0)) { let sp = 0; for (const p of pointers.values()) sp = Math.max(sp, Math.hypot(p.vx, p.vy)); dr.filt.frequency.setTargetAtTime(340 + Math.min(1400, sp * 45), AC.currentTime, .25); }
   // adaptive quality
   if (el < 250) { fpsT += el; fpsN++; } else { fpsT = 0; fpsN = 0; }
