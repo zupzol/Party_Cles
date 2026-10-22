@@ -40,7 +40,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .sp{flex:1}
 .ib{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;opacity:.8;transition:all .15s}
 .ib:hover,.seg button:hover{opacity:1}
-.ib.on{background:rgba(160,200,255,.22);opacity:1}
+.ib.on{background:rgba(150,200,255,.38);opacity:1;box-shadow:0 0 0 1px rgba(190,220,255,.55),0 0 14px rgba(150,200,255,.35)}
+#snd:not(.on),#sfx:not(.on){opacity:.55}
 .ib svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 #panel{position:fixed;top:calc(56px + env(safe-area-inset-top));right:10px;width:300px;max-height:calc(100% - 70px);overflow:auto;border-radius:16px;padding:6px 14px 14px;z-index:2;
   transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .2s;scrollbar-width:thin}
@@ -132,7 +133,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;border:0;border-radiu
   <button class="ib glass" id="share" title="Share link"><svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
   <button class="ib glass dim" id="undoT" title="Undo last star or black hole (Ctrl/Cmd+Z)" disabled><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
   <button class="ib glass on" id="sfx" title="Sound effects (on)"><svg viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/><path id="sfxx" d="M3 3l18 18" opacity="0"/></svg></button>
-  <button class="ib glass" id="snd" title="Drone sound (off)"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="sndw" d="M17 9c1.5 1.5 1.5 4.5 0 6M19.5 6.5c3 3 3 8 0 11" opacity=".35"/></svg></button>
+  <button class="ib glass" id="snd" title="Drone sound (off)"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="sndw" d="M17 9c1.5 1.5 1.5 4.5 0 6M19.5 6.5c3 3 3 8 0 11" opacity=".35"/><path id="sndx" d="M3 3l18 18"/></svg></button>
   <button class="ib glass" id="fs" title="Full screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   <button class="ib glass" id="cfg" title="Controls"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
 </div>
@@ -200,8 +201,11 @@ const DEF = Object.assign({}, S);
 const G = window.G = (() => {
   const KEY = 'partycles.v3';
   let st; try { st = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { st = {}; }
-  st = Object.assign({ xp: 0, best: 0, streak: 0, day: '', eaten: 0, stars: 0, fused: 0, goals: 0, maxCombo: 0, sfx: 1, intro: 0 }, st);
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} };
+  // v3.1.1: sound prefs moved to their own key, so an old muted flag can't silence first-time sound
+  delete st.sfx; let sfxPref = null; try { sfxPref = localStorage.getItem('partycles.sfx'); } catch (e) {}
+  st = Object.assign({ xp: 0, best: 0, streak: 0, day: '', eaten: 0, stars: 0, fused: 0, goals: 0, maxCombo: 0, intro: 0 }, st);
+  st.sfx = sfxPref === '0' ? 0 : 1;
+  const save = () => { try { const o = Object.assign({}, st); delete o.sfx; localStorage.setItem(KEY, JSON.stringify(o)); localStorage.setItem('partycles.sfx', st.sfx ? '1' : '0'); } catch (e) {} };
   const need = l => Math.round(80 * Math.pow(l, 1.45)); // xp from level l to l+1
   function lvlOf(xp) { let l = 1; while (xp >= need(l)) { xp -= need(l); l++; } return [l, xp, need(l)]; }
   const g = { st, save, eat: 0, shake: 0, score: 0, combo: 1, comboT: 0, sparks: [], floats: [], pend: 0, modeT: 0 };
@@ -212,24 +216,42 @@ const G = window.G = (() => {
   const snap = f => { const m = 12 * Math.log2(f / 261.63), o = Math.floor(m / 12), r = m - o * 12; let best = 0;
     for (const p of PENTA.concat(12)) if (Math.abs(p - r) < Math.abs(best - r)) best = p; return 261.63 * Math.pow(2, (o * 12 + best) / 12); };
   function audio() {
-    if (ac) { if (ac.state !== 'running') ac.resume(); return ac; }
-    ac = window.__pcAC = new (window.AudioContext || window.webkitAudioContext)();
-    const master = ac.createGain(); master.gain.value = .55; const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200;
-    master.connect(lp); lp.connect(ac.destination);
-    const inp = ac.createGain(); inp.connect(master);
+    if (ac) { if (ac.state !== 'running') ac.resume().catch(() => {}); return ac; }
+    const AC_ = window.AudioContext || window.webkitAudioContext; if (!AC_) return null;
+    ac = window.__pcAC = new AC_();
+    const master = ac.createGain(); master.gain.value = .9; const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -10; comp.knee.value = 6; comp.ratio.value = 4; comp.attack.value = .005; comp.release.value = .25;
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5000;
+    master.connect(lp); lp.connect(comp); comp.connect(ac.destination); g.out = comp;
+    const inp = ac.createGain(); inp.connect(master); // dry stays dominant
     const dl = ac.createDelay(2), fb = ac.createGain(), dw = ac.createGain(), df = ac.createBiquadFilter();
-    dl.delayTime.value = .38; fb.gain.value = .38; dw.gain.value = .32; df.type = 'lowpass'; df.frequency.value = 1800;
+    dl.delayTime.value = .34; fb.gain.value = .3; dw.gain.value = .18; df.type = 'lowpass'; df.frequency.value = 2400;
     inp.connect(dl); dl.connect(df); df.connect(fb); fb.connect(dl); df.connect(dw); dw.connect(master);
-    const cv = ac.createConvolver(), len = ac.sampleRate * 2.6 | 0, ir = ac.createBuffer(2, len, ac.sampleRate);
-    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
-    cv.buffer = ir; const rw = ac.createGain(); rw.gain.value = .45; inp.connect(cv); cv.connect(rw); rw.connect(master);
+    const cv = ac.createConvolver(), len = ac.sampleRate * 2 | 0, ir = ac.createBuffer(2, len, ac.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.5) * .5; }
+    cv.buffer = ir; const rw = ac.createGain(); rw.gain.value = .22; inp.connect(cv); cv.connect(rw); rw.connect(master);
     bus = inp; return ac;
   }
+  g.ctx = audio;
+  // unlock inside the very first gesture (iOS needs touchend/click; Chrome accepts pointerdown)
+  const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
+  let unlocked = false, tagEl = null;
+  function unlock() {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {} // iOS 17+: ignore the silent switch
+    const c = audio(); if (!c) return;
+    try { const b = c.createBuffer(1, 1, 22050), s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0); } catch (e) {}
+    if (!tagEl) { try { tagEl = new Audio(SILENT); tagEl.setAttribute('playsinline', ''); tagEl.loop = false; const pr = tagEl.play(); pr && pr.catch(() => {}); } catch (e) {} }
+    if (c.state === 'running' && !unlocked) { unlocked = true;
+      if (/iP(hone|ad|od)/.test(navigator.userAgent) && !st.iosHint && st.sfx) { st.iosHint = 1; save(); setTimeout(() => toast('Sound on: no sound? Turn off silent mode'), 600); } }
+  }
+  g.unlock = unlock;
+  ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'].forEach(ev => window.addEventListener(ev, unlock, { capture: true, passive: true }));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && ac && ac.state !== 'running') ac.resume().catch(() => {}); });
   g.blip = (f, d = .06, type = 'sine', delay = 0, vol = .07) => {
     if (!st.sfx) return;
     try { audio(); const t = ac.currentTime + delay + .005, o = ac.createOscillator(), gn = ac.createGain();
-      o.type = type === 'triangle' ? 'triangle' : 'sine'; o.frequency.value = snap(Math.max(110, Math.min(1400, f)));
-      const v = Math.min(.05, vol * .45), atk = .025 + Math.min(.06, d * .3), rel = .9 + d * 3;
+      o.type = type === 'triangle' ? 'triangle' : 'sine'; o.frequency.value = snap(Math.max(330, Math.min(1400, f < 300 ? f * 4 : f)));
+      const v = Math.min(.32, .12 + vol * 2), atk = .02 + Math.min(.05, d * .25), rel = .8 + d * 2.5;
       gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(v, t + atk); gn.gain.setTargetAtTime(0, t + atk, rel / 4);
       o.connect(gn); gn.connect(bus); o.start(t); o.stop(t + atk + rel * 1.6);
     } catch (e) {}
@@ -239,7 +261,7 @@ const G = window.G = (() => {
     try { audio(); const t0 = ac.currentTime + .01;
       notes.forEach((f, i) => [-6, 6].forEach(det => { const t = t0 + i * .07, o = ac.createOscillator(), gn = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
         o.type = 'sine'; o.frequency.value = f; o.detune.value = det; lfo.frequency.value = 4 + i; lg.gain.value = 3; lfo.connect(lg); lg.connect(o.detune);
-        gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(.012, t + .35); gn.gain.setTargetAtTime(0, t + .5, .7);
+        gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(.06, t + .3); gn.gain.setTargetAtTime(0, t + .5, .7);
         o.connect(gn); gn.connect(bus); o.start(t); lfo.start(t); o.stop(t + 4); lfo.stop(t + 4); })); } catch (e) {}
   };
   const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
@@ -341,7 +363,7 @@ const G = window.G = (() => {
   // --- sfx toggle ---
   const sb = document.getElementById('sfx');
   const sfxUI = () => { sb.classList.toggle('on', !!st.sfx); document.getElementById('sfxx').setAttribute('opacity', st.sfx ? '0' : '1'); sb.title = 'Sound effects (' + (st.sfx ? 'on' : 'off') + ')'; };
-  sb.onclick = () => { st.sfx = st.sfx ? 0 : 1; save(); sfxUI(); g.blip(660, .06); };
+  sb.onclick = () => { st.sfx = st.sfx ? 0 : 1; save(); sfxUI(); unlock(); g.blip(660, .06); toast('Sound effects ' + (st.sfx ? 'on' : 'off')); };
   // --- daily streak ---
   g.start = () => { sfxUI();
     const d = new Date(), today = d.toDateString(), y = new Date(d - 864e5).toDateString();
@@ -728,14 +750,14 @@ function resize() {
 let AC = null, droneOn = false, dr = null;
 function droneStart() {
   try {
-    AC = AC || new (window.AudioContext || window.webkitAudioContext)(); AC.resume && AC.resume();
-    const out = AC.createGain(); out.gain.value = 0; const filt = AC.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 380; filt.Q.value = .8;
+    AC = G.ctx(); if (!AC) throw 0; G.unlock();
+    const out = AC.createGain(); out.gain.value = 0; const filt = AC.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 900; filt.Q.value = .8;
     filt.connect(out); out.connect(AC.destination);
     const oscs = [];
-    [[55, 'sine', .5, 0], [82.41, 'sine', .28, 4], [110, 'triangle', .14, -5], [164.8, 'sine', .07, 3]].forEach(([f, t, gv, det]) => {
+    [[220, 'sine', .45, 0], [329.6, 'sine', .3, 4], [440, 'triangle', .14, -5], [659.3, 'sine', .07, 3]].forEach(([f, t, gv, det]) => {
       const o = AC.createOscillator(); o.type = t; o.frequency.value = f; o.detune.value = det; const g = AC.createGain(); g.gain.value = gv; o.connect(g); g.connect(filt); o.start(); oscs.push(o); });
     const lfo = AC.createOscillator(); lfo.frequency.value = .06; const lg = AC.createGain(); lg.gain.value = 120; lfo.connect(lg); lg.connect(filt.frequency); lfo.start(); oscs.push(lfo);
-    out.gain.setTargetAtTime(.06, AC.currentTime, 1.2);
+    out.gain.setTargetAtTime(.22, AC.currentTime, 1.2);
     dr = { out, filt, oscs };
   } catch (e) { droneOn = false; }
 }
@@ -771,7 +793,7 @@ function syncUI() {
 }
 document.querySelectorAll('#modes button').forEach(b => b.onclick = () => { if (G.locked('m:' + b.dataset.mode)) return; S.mode = b.dataset.mode; syncUI(); G.blip(520 + 80 * ['pull', 'push', 'spin', 'vortex'].indexOf(S.mode), .05, 'triangle'); });
 $('cfg').onclick = () => { $('panel').classList.toggle('closed'); $('cfg').classList.toggle('on', !$('panel').classList.contains('closed')); };
-$('snd').onclick = () => { droneOn = !droneOn; droneOn ? droneStart() : droneStop(); $('snd').classList.toggle('on', droneOn); $('sndw').setAttribute('opacity', droneOn ? '1' : '.35'); $('snd').title = 'Drone sound (' + (droneOn ? 'on' : 'off') + ')'; };
+$('snd').onclick = () => { droneOn = !droneOn; droneOn ? droneStart() : droneStop(); $('snd').classList.toggle('on', droneOn); $('sndw').setAttribute('opacity', droneOn ? '1' : '.35'); $('sndx').setAttribute('opacity', droneOn ? '0' : '1'); $('snd').title = 'Drone sound (' + (droneOn ? 'on' : 'off') + ')'; };
 const CANON = 'https://zupzol.github.io/Party_Cles/';
 function shareUrl() { if (location.hostname === 'zupzol.github.io') return location.origin + location.pathname; return /^https?:$/.test(location.protocol) ? location.href : CANON; }
 $('share').onclick = async () => {
@@ -808,7 +830,7 @@ window.addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') retu
 // hint
 const hintEl = $('hint'); let hintGone = false;
 if (!G.st.intro) { hintEl.classList.add('gone'); hintGone = true; $('intro').classList.remove('gone'); }
-$('intro').addEventListener('pointerdown', e => { e.preventDefault(); $('intro').classList.add('gone'); G.st.intro = 1; G.save(); G.blip(660, .08); G.blip(990, .08, 'sine', .07); });
+$('intro').addEventListener('click', e => { G.unlock(); $('intro').classList.add('gone'); G.st.intro = 1; G.save(); G.blip(660, .08); G.blip(990, .08, 'sine', .07); });
 function hideHint() { if (!hintGone) { hintGone = true; hintEl.classList.add('gone'); } }
 setTimeout(hideHint, 9000);
 
@@ -1041,7 +1063,7 @@ function frame(now) {
     if (p.down && !p.moved && !p.holeMade && now - p.t0 > 450) { p.holeMade = true; addHole(p.x, p.y); }
   }
   updBodies(dt); G.tick(dt, now); if (fpsN % 15 === 0) undoUI(); buildAttractors(); step(dt); render();
-  if (dr && (fpsN % 6 === 0)) { let sp = 0; for (const p of pointers.values()) sp = Math.max(sp, Math.hypot(p.vx, p.vy)); dr.filt.frequency.setTargetAtTime(340 + Math.min(1400, sp * 45), AC.currentTime, .25); }
+  if (dr && (fpsN % 6 === 0)) { let sp = 0; for (const p of pointers.values()) sp = Math.max(sp, Math.hypot(p.vx, p.vy)); dr.filt.frequency.setTargetAtTime(800 + Math.min(1600, sp * 45), AC.currentTime, .25); }
   // adaptive quality
   if (el < 250) { fpsT += el; fpsN++; } else { fpsT = 0; fpsN = 0; }
   if (fpsT > 1000) { const fps = fpsN * 1000 / fpsT; fpsT = 0; fpsN = 0;
