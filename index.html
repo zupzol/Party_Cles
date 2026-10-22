@@ -31,22 +31,32 @@ canvas{position:fixed;inset:0;display:block;touch-action:none;cursor:crosshair}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .glass{background:rgba(14,16,28,.62);-webkit-backdrop-filter:blur(14px) saturate(140%);backdrop-filter:blur(14px) saturate(140%);
   border:1px solid rgba(255,255,255,.08);box-shadow:0 8px 30px rgba(0,0,0,.35)}
-#top{position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;right:10px;display:flex;align-items:center;gap:8px;pointer-events:none;z-index:3}
+#top{position:fixed;top:calc(10px + env(safe-area-inset-top));left:calc(10px + env(safe-area-inset-left));right:calc(10px + env(safe-area-inset-right));display:flex;align-items:center;gap:8px;pointer-events:none;z-index:3}
 #top>*{pointer-events:auto}
 .brand{font-weight:600;letter-spacing:.18em;font-size:11px;opacity:.7;padding:0 6px 0 4px}
 .seg{display:flex;border-radius:999px;padding:3px}
 .seg button{padding:6px 13px;border-radius:999px;opacity:.65;transition:all .15s}
 .seg button.on{background:rgba(255,255,255,.14);opacity:1}
 .sp{flex:1}
+#share{width:44px;height:44px;flex:none}
 .ib{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;opacity:.8;transition:all .15s}
 .ib:hover,.seg button:hover{opacity:1}
 .ib.on{background:rgba(150,200,255,.38);opacity:1;box-shadow:0 0 0 1px rgba(190,220,255,.55),0 0 14px rgba(150,200,255,.35)}
 #snd:not(.on),#sfx:not(.on){opacity:.55}
 .ib svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-#panel{position:fixed;top:calc(56px + env(safe-area-inset-top));right:10px;width:300px;max-height:calc(100% - 70px);overflow:auto;border-radius:16px;padding:6px 14px 14px;z-index:2;
+#panel{position:fixed;top:calc(62px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right));width:310px;max-height:calc(100% - 72px - env(safe-area-inset-top) - env(safe-area-inset-bottom));max-height:calc(100dvh - 72px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;border-radius:16px;padding:6px 14px 14px;z-index:2;
   transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .2s;scrollbar-width:thin}
 #panel.closed{transform:translateX(calc(100% + 24px));opacity:0;pointer-events:none}
 #panel section{padding:10px 0 4px;border-bottom:1px solid rgba(255,255,255,.06)}
+#ph{position:sticky;top:-6px;z-index:1;display:flex;align-items:center;justify-content:space-between;margin:-6px -14px 0;padding:8px 8px 6px 16px;background:rgba(14,16,28,.92);border-bottom:1px solid rgba(255,255,255,.06)}
+#ph b{font-size:13px;letter-spacing:.06em;font-weight:600}
+#pclose{width:44px;height:44px;border-radius:50%;font-size:16px;opacity:.75}#pclose:hover{opacity:1;background:rgba(255,255,255,.08)}
+#cfg{display:flex;align-items:center;gap:7px;height:44px;padding:0 15px 0 12px;border-radius:999px;font-weight:600;font-size:13px;flex:none;background:rgba(120,160,255,.28);border-color:rgba(190,215,255,.4)}
+#cfg svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
+#cfg.on{background:rgba(150,190,255,.45)}
+#quick{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}#quick #undoT{display:none}
+#quick .ib{width:auto;height:auto;min-height:56px;border-radius:12px;display:flex;flex-direction:column;gap:3px;align-items:center;justify-content:center;background:rgba(255,255,255,.06);font-size:11px}
+#quick .ib.on{background:rgba(150,200,255,.3)}
 #panel h3{font-size:10px;letter-spacing:.2em;text-transform:uppercase;font-weight:600;opacity:.5;margin-bottom:8px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chips button{padding:5px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.06);opacity:.8;transition:all .15s}
@@ -107,14 +117,19 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;border:0;border-radiu
 #stats{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:12px;opacity:.75;font-variant-numeric:tabular-nums}
 @media (pointer:coarse){.seg button{min-height:38px}.chips button{padding:8px 12px}.sw button{width:32px;height:32px}.ib{width:40px;height:40px}}
 .ib{flex:none}
-@media (max-width:430px){#undoT{display:none!important}}
-@media (max-width:400px){.ib{width:36px;height:36px}#xpb{width:44px}#fs{display:none!important}.seg button{padding:6px 9px}}
+
+@media (max-width:400px){#xpb{width:44px}}
 @media (max-width:640px){
   .brand{display:none}
-  #panel{top:auto;bottom:calc(8px + env(safe-area-inset-bottom));left:8px;right:8px;width:auto;max-height:50vh}
+  #panel{top:auto;bottom:calc(8px + env(safe-area-inset-bottom));left:calc(8px + env(safe-area-inset-left));right:calc(8px + env(safe-area-inset-right));width:auto;max-height:62vh;max-height:62dvh;z-index:4}
+  #modes{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));z-index:3}
+  #modes button{min-height:44px;padding:0 16px}
+  #hint{bottom:calc(72px + env(safe-area-inset-bottom))}
   #panel.closed{transform:translateY(calc(100% + 24px))}
   #hint{font-size:11px}
 }
+@media (max-height:500px) and (min-width:641px){#panel{width:min(330px,46vw)}#hud{top:calc(10px + env(safe-area-inset-top))}#top .seg{margin-right:auto}}
+@media (max-height:500px) and (min-width:641px) and (max-width:1000px){#hud{left:auto;right:calc(180px + env(safe-area-inset-right));transform:none}#hudrow{flex-wrap:nowrap}#goal{display:none}}
 @media (max-width:400px){
   #top{gap:5px;left:8px;right:8px}
   .seg button{padding:6px 10px}
@@ -131,21 +146,19 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;border:0;border-radiu
   </div>
   <div class="sp"></div>
   <button class="ib glass" id="share" title="Share link"><svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
-  <button class="ib glass dim" id="undoT" title="Undo last star or black hole (Ctrl/Cmd+Z)" disabled><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
-  <button class="ib glass on" id="sfx" title="Sound effects (on)"><svg viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/><path id="sfxx" d="M3 3l18 18" opacity="0"/></svg></button>
-  <button class="ib glass" id="snd" title="Ambient bed (off)"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="sndw" d="M17 9c1.5 1.5 1.5 4.5 0 6M19.5 6.5c3 3 3 8 0 11" opacity=".35"/><path id="sndx" d="M3 3l18 18"/></svg></button>
-  <button class="ib glass" id="fs" title="Full screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
-  <button class="ib glass" id="cfg" title="Controls"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+  <button class="glass" id="cfg" title="Customize: colors, textures, physics, sound" aria-expanded="false" aria-controls="panel"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>Customize</span></button>
 </div>
-<div id="panel" class="glass closed">
+<div id="panel" class="glass closed" role="dialog" aria-label="Customize">
+  <div id="ph"><b>Customize</b><button id="pclose" title="Close" aria-label="Close">✕</button></div>
   <div class="row" id="edit"><button id="undo" title="Remove the last star or black hole">↶ Undo</button><button id="clear" title="Remove all stars and black holes">✕ Clear stars &amp; holes</button></div>
-  <section><h3>Progress</h3><div id="stats"></div></section>
+  <section><h3>Physics</h3><div id="sliders"></div></section>
   <section><h3>Stage</h3><div class="chips" id="stages"></div></section>
   <section><h3>Texture</h3><div class="chips" id="textures"></div></section>
   <section><h3>Color</h3><div class="sw" id="colors"></div></section>
-  <section><h3>Physics</h3><div id="sliders"></div></section>
   <section><h3>Shapes</h3><div class="chips" id="shapes"></div></section>
   <section><h3>Astronomy</h3><div class="chips add" id="astro"></div></section>
+  <section><h3>Sound &amp; view</h3><div id="quick"><button class="ib qt on" id="sfx" title="Sound effects (on)"><svg viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/><path id="sfxx" d="M3 3l18 18" opacity="0"/></svg><span>Effects</span></button><button class="ib qt" id="snd" title="Ambient bed (off)"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="sndw" d="M17 9c1.5 1.5 1.5 4.5 0 6M19.5 6.5c3 3 3 8 0 11" opacity=".35"/><path id="sndx" d="M3 3l18 18"/></svg><span>Ambient</span></button><button class="ib qt" id="fs" title="Full screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>Fullscreen</span></button><button class="ib qt dim" id="undoT" title="Undo last star or black hole (Ctrl/Cmd+Z)" disabled><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg><span>Undo</span></button></div></section>
+  <section><h3>Progress</h3><div id="stats"></div></section>
   <div class="row"><button id="reset">Reset</button><button id="rand">Randomize</button></div>
 </div>
 <div id="hint" class="glass">drag to pull · tap for a star · hold for a black hole</div>
@@ -155,7 +168,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;border:0;border-radiu
 <div id="ms" class="glass"><h4 id="msh"></h4><p id="msp"></p></div>
 <div id="intro" class="gone"><div class="card glass"><h2>PARTY_CLES</h2><ul>
   <li><span>👆</span>Drag to pull particles</li><li><span>✦</span>Tap to drop a star (tap a star to fuse it)</li>
-  <li><span>◉</span>Hold for a black hole: it eats particles for points</li><li><span>🏆</span>Clear goals, level up, unlock colors &amp; textures</li></ul>
+  <li><span>◉</span>Hold for a black hole: it eats particles for points</li><li><span>⚙</span>Tap <b>Customize</b> for colors, textures &amp; physics</li><li><span>🏆</span>Clear goals, level up, unlock colors &amp; textures</li></ul>
   <button id="go">Play</button></div></div>
 <script>
 (() => {
@@ -383,7 +396,7 @@ const G = window.G = (() => {
     sEl.textContent = g.score.toLocaleString(); }
   function stats() { const el = document.getElementById('stats'); if (!el) return; const [l, x, n] = lvlOf(st.xp);
     el.innerHTML = `<span>Level ${l}</span><span>${x}/${n} XP</span><span>Best ${st.best.toLocaleString()}</span><span>🔥 ${st.streak}-day streak</span><span>Eaten ${st.eaten.toLocaleString()}</span><span>Goals ${st.goals}</span>`; }
-  document.getElementById('lvl').onclick = () => { const p = document.getElementById('panel'); p.classList.remove('closed'); document.getElementById('cfg').classList.add('on'); p.scrollTop = 0; };
+  document.getElementById('lvl').onclick = () => { document.getElementById('cfg').click(); const p = document.getElementById('panel'); if (p.classList.contains('closed')) document.getElementById('cfg').click(); setTimeout(() => document.getElementById('stats').scrollIntoView({ block: 'center', behavior: 'smooth' }), 50); };
   document.getElementById('goal').onclick = () => { g.newGoal(); g.blip(440, .05); };
   // --- events ---
   g.onStar = (x, y, col) => { st.stars++; const pts = g.points(5, x, y); g.prog('stars', 1); g.burst(x, y, col, 14, 2.4); g.sfx.star(); buzz(8); return pts; };
@@ -846,7 +859,10 @@ function syncUI() {
   const pk = $('picker'); if (pk && /^#[0-9a-f]{6}$/i.test(S.color)) pk.value = S.color;
 }
 document.querySelectorAll('#modes button').forEach(b => b.onclick = () => { if (G.locked('m:' + b.dataset.mode)) return; S.mode = b.dataset.mode; syncUI(); G.blip(520 + 80 * ['pull', 'push', 'spin', 'vortex'].indexOf(S.mode), .05, 'triangle'); });
-$('cfg').onclick = () => { $('panel').classList.toggle('closed'); $('cfg').classList.toggle('on', !$('panel').classList.contains('closed')); };
+function setPanel(open) { $('panel').classList.toggle('closed', !open); $('cfg').classList.toggle('on', open); $('cfg').setAttribute('aria-expanded', open); if (open) syncUI(); }
+$('cfg').onclick = () => setPanel($('panel').classList.contains('closed'));
+$('pclose').onclick = () => setPanel(false);
+window.addEventListener('keydown', e => { if (e.key === 'Escape') setPanel(false); });
 $('snd').onclick = () => { droneOn = !droneOn; droneOn ? droneStart() : droneStop(); $('snd').classList.toggle('on', droneOn); $('sndw').setAttribute('opacity', droneOn ? '1' : '.35'); $('sndx').setAttribute('opacity', droneOn ? '0' : '1'); $('snd').title = 'Ambient bed (' + (droneOn ? 'on' : 'off') + ')'; };
 const CANON = 'https://zupzol.github.io/Party_Cles/';
 function shareUrl() { if (location.hostname === 'zupzol.github.io') return location.origin + location.pathname; return /^https?:$/.test(location.protocol) ? location.href : CANON; }
